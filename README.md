@@ -1,1 +1,1 @@
-https://inf-for-all.github.io/
+inf-for-all.github.io
