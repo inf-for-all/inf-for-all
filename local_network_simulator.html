@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Симулятор локальної мережі — 5 клас</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg2: #f5f4f0;
+    --bg3: #eeece7;
+    --text: #1a1a18;
+    --text2: #6b6a64;
+    --text3: #9c9a92;
+    --border: rgba(0,0,0,0.12);
+    --border2: rgba(0,0,0,0.22);
+    --radius: 8px;
+    --radius-lg: 12px;
+    --font: system-ui, -apple-system, sans-serif;
+    --font-mono: ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1e1e1c;
+      --bg2: #2a2a28;
+      --bg3: #323230;
+      --text: #e8e6de;
+      --text2: #a0a098;
+      --text3: #6b6a64;
+      --border: rgba(255,255,255,0.12);
+      --border2: rgba(255,255,255,0.22);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font); background: var(--bg3); color: var(--text); min-height: 100vh; padding: 1.5rem; }
+  #app { max-width: 720px; margin: 0 auto; background: var(--bg); border-radius: var(--radius-lg); border: 0.5px solid var(--border); padding: 1.5rem; }
+  h1 { font-size: 20px; font-weight: 500; margin-bottom: 4px; }
+  .subtitle { font-size: 13px; color: var(--text2); margin-bottom: 1.2rem; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 1.2rem; flex-wrap: wrap; }
+  .tab { padding: 6px 14px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 13px; cursor: pointer; background: var(--bg); color: var(--text); transition: background .15s; font-family: var(--font); }
+  .tab.active { background: var(--bg2); border-color: var(--border2); font-weight: 500; }
+  .panel { display: none; } .panel.active { display: block; }
+
+  /* Network canvas */
+  #net-canvas { width: 100%; height: 340px; position: relative; border: 0.5px solid var(--border); border-radius: var(--radius-lg); background: var(--bg2); overflow: hidden; margin-bottom: 10px; }
+  .dev { position: absolute; display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; user-select: none; z-index: 2; }
+  .dev-icon { width: 52px; height: 52px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 24px; border: 1.5px solid transparent; transition: border-color .2s, transform .1s; }
+  .dev:hover .dev-icon { transform: scale(1.07); }
+  .dev.selected .dev-icon { border-color: #378ADD; }
+  .dev-label { font-size: 11px; font-weight: 500; color: var(--text2); text-align: center; max-width: 70px; }
+  .dev-ip { font-size: 10px; color: var(--text3); }
+  svg#lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+  .packet { position: absolute; width: 18px; height: 18px; border-radius: 50%; z-index: 3; pointer-events: none; display: flex; align-items: center; justify-content: center; font-size: 9px; }
+
+  /* Action bar */
+  .action-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .action-bar select, .action-bar button { font-size: 13px; font-family: var(--font); }
+  .action-bar select { padding: 5px 8px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg); color: var(--text); }
+  .lbl { font-size: 13px; color: var(--text2); }
+  .send-btn { padding: 6px 14px; border: 0.5px solid var(--border2); border-radius: var(--radius); background: var(--bg); color: var(--text); cursor: pointer; font-size: 13px; font-family: var(--font); }
+  .send-btn:hover { background: var(--bg2); }
+  .send-btn:disabled { opacity: .4; cursor: default; }
+
+  /* Log */
+  .log { height: 80px; overflow-y: auto; border: 0.5px solid var(--border); border-radius: var(--radius); padding: 6px 10px; font-size: 12px; font-family: var(--font-mono); background: var(--bg); color: var(--text2); }
+  .log div { padding: 1px 0; }
+  .log .ok { color: #1D9E75; } .log .err { color: #D85A30; } .log .info { color: #378ADD; }
+
+  /* Info box */
+  .info-box { border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 12px 16px; margin-bottom: 10px; background: var(--bg); font-size: 13px; line-height: 1.6; color: var(--text2); }
+  .info-box strong { color: var(--text); font-weight: 500; }
+
+  /* Quiz */
+  .q-card { border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; margin-bottom: 10px; background: var(--bg); }
+  .q-text { font-size: 14px; font-weight: 500; margin-bottom: 10px; color: var(--text); }
+  .q-opts { display: flex; flex-direction: column; gap: 6px; }
+  .q-opt { padding: 8px 12px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 13px; cursor: pointer; background: var(--bg2); color: var(--text); text-align: left; transition: background .1s; font-family: var(--font); }
+  .q-opt:hover { background: var(--bg3); }
+  .q-opt.correct { background: #EAF3DE; border-color: #639922; color: #3B6D11; }
+  .q-opt.wrong { background: #FCEBEB; border-color: #E24B4A; color: #A32D2D; }
+  .score-bar { font-size: 13px; color: var(--text2); margin-bottom: 12px; }
+  .restart-btn { margin-top: 10px; padding: 7px 16px; border: 0.5px solid var(--border2); border-radius: var(--radius); font-size: 13px; cursor: pointer; background: var(--bg2); color: var(--text); font-family: var(--font); }
+
+  /* Dictionary */
+  .dict-entry { border-bottom: 0.5px solid var(--border); padding: 10px 0; }
+  .dict-entry:last-child { border-bottom: none; }
+  .dict-term { font-size: 14px; font-weight: 500; color: var(--text); }
+  .dict-def { font-size: 13px; color: var(--text2); margin-top: 2px; line-height: 1.5; }
+  .dict-emoji { font-size: 20px; margin-right: 8px; vertical-align: middle; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>Симулятор локальної мережі</h1>
+  <p class="subtitle">5 клас · Інформатика · Дізнайся, як комп'ютери спілкуються одне з одним</p>
+
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('sim')">Симулятор</button>
+    <button class="tab" onclick="switchTab('learn')">Теорія</button>
+    <button class="tab" onclick="switchTab('quiz')">Тест</button>
+    <button class="tab" onclick="switchTab('dict')">Словник</button>
+  </div>
+
+  <!-- SIMULATOR -->
+  <div class="panel active" id="tab-sim">
+    <div id="net-canvas"><svg id="lines"></svg></div>
+    <div class="action-bar">
+      <span class="lbl">Від:</span>
+      <select id="sel-from"></select>
+      <span class="lbl">До:</span>
+      <select id="sel-to"></select>
+      <button class="send-btn" id="send-btn" onclick="sendPacket()">📤 Надіслати дані</button>
+      <button class="send-btn" onclick="resetNet()">↺ Скинути</button>
+    </div>
+    <div class="log" id="log"><div class="info">👆 Оберіть два пристрої та натисни «Надіслати дані»</div></div>
+  </div>
+
+  <!-- LEARN -->
+  <div class="panel" id="tab-learn">
+    <div class="info-box"><strong>🌐 Що таке локальна мережа (LAN)?</strong><br>Локальна мережа — це коли кілька комп'ютерів з'єднані між собою в одному місці (клас, будинок, офіс). Вони можуть обмінюватися файлами, грати разом в ігри або разом друкувати на одному принтері.</div>
+    <div class="info-box"><strong>📡 Маршрутизатор (роутер)</strong><br>Маршрутизатор — це «головний диспетчер» мережі. Він приймає дані від одного пристрою і відправляє їх потрібному отримувачу. Без нього пристрої не знали б, куди надсилати інформацію.</div>
+    <div class="info-box"><strong>🔢 IP-адреса</strong><br>Кожен пристрій у мережі має свою унікальну адресу — IP-адресу. Це схоже на домашню адресу: 192.168.1.5 означає «п'ятий пристрій у нашій мережі». Завдяки IP-адресам пакети доходять до потрібного пристрою.</div>
+    <div class="info-box"><strong>📦 Пакети даних</strong><br>Коли ти надсилаєш файл або повідомлення, комп'ютер розбиває їх на маленькі шматочки — пакети. Кожен пакет містить адресу відправника, адресу отримувача та частину даних. Маршрутизатор передає ці пакети один за одним.</div>
+    <div class="info-box"><strong>🖨️ Спільні ресурси</strong><br>У локальній мережі всі пристрої можуть користуватися одним принтером або жорстким диском. Наприклад, у шкільному класі один принтер може друкувати документи з будь-якого комп'ютера.</div>
+  </div>
+
+  <!-- QUIZ -->
+  <div class="panel" id="tab-quiz">
+    <div class="score-bar" id="score-bar">Питання 1 з 6</div>
+    <div class="q-card" id="q-card">
+      <div class="q-text" id="q-text"></div>
+      <div class="q-opts" id="q-opts"></div>
+    </div>
+    <button class="restart-btn" id="restart-btn" style="display:none" onclick="startQuiz()">↺ Пройти ще раз</button>
+  </div>
+
+  <!-- DICTIONARY -->
+  <div class="panel" id="tab-dict">
+    <div id="dict-list"></div>
+  </div>
+</div>
+
+<script>
+const DEVICES = [
+  {id:'pc1',    label:'Комп\u02bcютер 1', ip:'192.168.1.2', emoji:'💻', x:8,  y:10, color:'#B5D4F4'},
+  {id:'pc2',    label:'Комп\u02bcютер 2', ip:'192.168.1.3', emoji:'🖥️', x:65, y:10, color:'#B5D4F4'},
+  {id:'pc3',    label:'Ноутбук',          ip:'192.168.1.4', emoji:'💻', x:8,  y:60, color:'#C0DD97'},
+  {id:'router', label:'Роутер',           ip:'192.168.1.1', emoji:'📡', x:37, y:36, color:'#FAC775'},
+  {id:'printer',label:'Принтер',          ip:'192.168.1.5', emoji:'🖨️', x:65, y:60, color:'#F4C0D1'},
+  {id:'phone',  label:'Телефон',          ip:'192.168.1.6', emoji:'📱', x:37, y:75, color:'#9FE1CB'},
+];
+const EDGES = [
+  ['pc1','router'],['pc2','router'],['pc3','router'],
+  ['printer','router'],['phone','router'],
+];
+
+let sending = false;
+
+function pct(p, total) { return Math.round(p / 100 * total); }
+
+function renderNet() {
+  const canvas = document.getElementById('net-canvas');
+  const svgEl = document.getElementById('lines');
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  svgEl.innerHTML = '';
+  EDGES.forEach(([a, b]) => {
+    const da = DEVICES.find(d => d.id === a), db = DEVICES.find(d => d.id === b);
+    const x1 = pct(da.x, W)+26, y1 = pct(da.y, H)+26;
+    const x2 = pct(db.x, W)+26, y2 = pct(db.y, H)+26;
+    const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+    line.setAttribute('x1', x1); line.setAttribute('y1', y1);
+    line.setAttribute('x2', x2); line.setAttribute('y2', y2);
+    line.setAttribute('stroke', 'rgba(128,128,120,0.35)');
+    line.setAttribute('stroke-width', '1.5');
+    line.id = `edge-${a}-${b}`;
+    svgEl.appendChild(line);
+  });
+  document.querySelectorAll('.dev').forEach(e => e.remove());
+  DEVICES.forEach(dev => {
+    const div = document.createElement('div');
+    div.className = 'dev'; div.id = 'dev-' + dev.id;
+    div.style.left = pct(dev.x, W) + 'px';
+    div.style.top  = pct(dev.y, H) + 'px';
+    div.innerHTML = `<div class="dev-icon" style="background:${dev.color}25;border-color:${dev.color}">${dev.emoji}</div>
+      <span class="dev-label">${dev.label}</span>
+      <span class="dev-ip">${dev.ip}</span>`;
+    canvas.appendChild(div);
+  });
+  const sf = document.getElementById('sel-from'), st = document.getElementById('sel-to');
+  sf.innerHTML = ''; st.innerHTML = '';
+  DEVICES.filter(d => d.id !== 'router').forEach(d => {
+    [sf, st].forEach(sel => {
+      const o = document.createElement('option');
+      o.value = d.id; o.textContent = d.label + ' (' + d.ip + ')';
+      sel.appendChild(o);
+    });
+  });
+  st.selectedIndex = 1;
+}
+
+function highlightEdge(a, b, on) {
+  const el = document.getElementById(`edge-${a}-${b}`) || document.getElementById(`edge-${b}-${a}`);
+  if (el) {
+    el.setAttribute('stroke', on ? '#378ADD' : 'rgba(128,128,120,0.35)');
+    el.setAttribute('stroke-width', on ? '2.5' : '1.5');
+  }
+}
+
+function devCenter(id) {
+  const el = document.getElementById('dev-' + id);
+  if (!el) return {x:0, y:0};
+  return {x: parseInt(el.style.left)+26, y: parseInt(el.style.top)+26};
+}
+
+function animatePacket(x1, y1, x2, y2, color, cb) {
+  const canvas = document.getElementById('net-canvas');
+  const pk = document.createElement('div');
+  pk.className = 'packet';
+  pk.style.background = color;
+  pk.style.left = x1 + 'px'; pk.style.top = y1 + 'px';
+  pk.textContent = '📦';
+  canvas.appendChild(pk);
+  const start = performance.now(), dur = 600;
+  function step(now) {
+    const t = Math.min((now - start) / dur, 1);
+    const ease = t < .5 ? 2*t*t : 1 - Math.pow(-2*t+2, 2)/2;
+    pk.style.left = (x1 + (x2-x1)*ease) + 'px';
+    pk.style.top  = (y1 + (y2-y1)*ease) + 'px';
+    if (t < 1) requestAnimationFrame(step);
+    else { pk.remove(); if (cb) cb(); }
+  }
+  requestAnimationFrame(step);
+}
+
+function log(msg, cls='') {
+  const l = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = cls; d.textContent = msg;
+  l.appendChild(d);
+  l.scrollTop = l.scrollHeight;
+}
+
+async function sendPacket() {
+  if (sending) return;
+  const from = document.getElementById('sel-from').value;
+  const to   = document.getElementById('sel-to').value;
+  if (from === to) { log('⚠️ Оберіть різні пристрої!', 'err'); return; }
+  sending = true;
+  document.getElementById('send-btn').disabled = true;
+  const df = DEVICES.find(d => d.id === from), dt = DEVICES.find(d => d.id === to);
+  log(`📤 ${df.label} надсилає пакет → ${dt.label}`, 'info');
+  const cf = devCenter(from), cr = devCenter('router'), ct = devCenter(to);
+  highlightEdge(from, 'router', true);
+  await new Promise(r => setTimeout(() => animatePacket(cf.x, cf.y, cr.x, cr.y, '#378ADD', r), 100));
+  log(`  📡 Роутер отримав пакет. IP відправника: ${df.ip}`);
+  highlightEdge(from, 'router', false);
+  await new Promise(r => setTimeout(r, 200));
+  highlightEdge('router', to, true);
+  await new Promise(r => setTimeout(() => animatePacket(cr.x, cr.y, ct.x, ct.y, '#1D9E75', r), 100));
+  highlightEdge('router', to, false);
+  log(`  ✅ ${dt.label} (${dt.ip}) отримав пакет!`, 'ok');
+  const tel = document.getElementById('dev-' + to);
+  if (tel) {
+    tel.querySelector('.dev-icon').style.transform = 'scale(1.2)';
+    setTimeout(() => { tel.querySelector('.dev-icon').style.transform = ''; }, 300);
+  }
+  sending = false;
+  document.getElementById('send-btn').disabled = false;
+}
+
+function resetNet() {
+  document.getElementById('log').innerHTML = '<div class="info">👆 Оберіть два пристрої та натисни «Надіслати дані»</div>';
+}
+
+// ─── QUIZ ───────────────────────────────────────────────────────────
+const QUESTIONS = [
+  {q:'Що таке локальна мережа (LAN)?', opts:['З\'єднання комп\'ютерів в одному місці','Інтернет по всьому світу','Програма для ігор','Тип принтера'], ans:0},
+  {q:'Який пристрій керує передачею даних між комп\'ютерами в мережі?', opts:['Принтер','Монітор','Маршрутизатор (роутер)','Клавіатура'], ans:2},
+  {q:'Для чого потрібна IP-адреса?', opts:['Щоб увімкнути комп\'ютер','Щоб пристрій мав унікальну адресу в мережі','Для збереження фотографій','Щоб зарядити батарею'], ans:1},
+  {q:'На що схожий пакет даних?', opts:['На цілий фільм одразу','На маленький конверт з частиною інформації та адресами','На вірус','На флешку'], ans:1},
+  {q:'Яка з цих IP-адрес правильна?', opts:['abc.def.ghi','192.168.1.5','мережа-номер-один','IP-45'], ans:1},
+  {q:'Що спільного можна мати в локальній мережі?', opts:['Лише ігри','Лише відео','Принтери, папки та файли','Лише звук'], ans:2},
+];
+
+let qIdx = 0, score = 0;
+
+function startQuiz() {
+  qIdx = 0; score = 0;
+  document.getElementById('restart-btn').style.display = 'none';
+  showQuestion();
+}
+
+function showQuestion() {
+  const q = QUESTIONS[qIdx];
+  document.getElementById('score-bar').textContent = `Питання ${qIdx+1} з ${QUESTIONS.length}  •  Правильних: ${score}`;
+  document.getElementById('q-text').textContent = q.q;
+  const opts = document.getElementById('q-opts');
+  opts.innerHTML = '';
+  q.opts.forEach((o, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'q-opt'; btn.textContent = o;
+    btn.onclick = () => answer(i);
+    opts.appendChild(btn);
+  });
+}
+
+function answer(i) {
+  const q = QUESTIONS[qIdx];
+  document.querySelectorAll('.q-opt').forEach((b, j) => {
+    b.onclick = null;
+    if (j === q.ans) b.classList.add('correct');
+    else if (j === i && i !== q.ans) b.classList.add('wrong');
+  });
+  if (i === q.ans) score++;
+  setTimeout(() => {
+    qIdx++;
+    if (qIdx < QUESTIONS.length) { showQuestion(); }
+    else {
+      document.getElementById('score-bar').textContent = `Результат: ${score} з ${QUESTIONS.length}`;
+      document.getElementById('q-text').textContent = score === QUESTIONS.length ? '🎉 Відмінно! Ти знаєш мережі!'
+        : score >= 4 ? '👍 Добре! Є над чим попрацювати.'
+        : '📚 Повтори теорію та спробуй ще раз.';
+      document.getElementById('q-opts').innerHTML = '';
+      document.getElementById('restart-btn').style.display = 'inline-block';
+    }
+  }, 900);
+}
+
+// ─── DICTIONARY ────────────────────────────────────────────────────
+const DICT = [
+  {emoji:'🌐', term:'Локальна мережа (LAN)', def:'Група пристроїв, з\'єднаних між собою в одному місці: класі, будинку або офісі.'},
+  {emoji:'📡', term:'Маршрутизатор (роутер)', def:'Пристрій, який передає пакети даних між пристроями мережі й вирішує, куди їх відправити.'},
+  {emoji:'🔢', term:'IP-адреса', def:'Унікальна числова адреса кожного пристрою в мережі. Наприклад: 192.168.1.5'},
+  {emoji:'📦', term:'Пакет даних', def:'Маленький шматочок інформації, що передається мережею. Містить адресу відправника та отримувача.'},
+  {emoji:'🔌', term:'Топологія мережі', def:'Спосіб з\'єднання пристроїв. Наприклад, «зірка» — коли всі підключені до одного центрального роутера.'},
+  {emoji:'🖨️', term:'Спільний ресурс', def:'Пристрій (принтер, жорсткий диск) або папка, якою можуть користуватися всі в мережі.'},
+  {emoji:'🔐', term:'Пароль мережі', def:'Секретний код для захисту мережі від чужих пристроїв.'},
+  {emoji:'📶', term:'Wi-Fi', def:'Бездротове з\'єднання пристроїв з мережею без проводів — через радіохвилі.'},
+];
+
+function renderDict() {
+  document.getElementById('dict-list').innerHTML = DICT.map(d =>
+    `<div class="dict-entry">
+      <div class="dict-term"><span class="dict-emoji">${d.emoji}</span>${d.term}</div>
+      <div class="dict-def">${d.def}</div>
+    </div>`).join('');
+}
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['sim','learn','quiz','dict'][i] === id);
+  });
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + id).classList.add('active');
+  if (id === 'sim') setTimeout(renderNet, 10);
+}
+
+// Init
+renderNet();
+startQuiz();
+renderDict();
+window.addEventListener('resize', () => {
+  if (document.getElementById('tab-sim').classList.contains('active')) renderNet();
+});
+</script>
+</body>
+</html>
